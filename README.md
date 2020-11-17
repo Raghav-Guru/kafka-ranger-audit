@@ -85,3 +85,55 @@ For example setting ConversionPattern will audit messages to kafka with  json fo
 Like below: 
 
     {"repoType":5,"repo":"c416_knox","reqUser":"admin","evtTime":"2018-11-08 02:19:13.240","access":"allow","resource":"default/WEBHDFS","resType":"service","action":"allow","result":1,"policy":19,"enforcer":"ranger-acl","cliIP":"172.25.39.129","agentHost":"c416-node2.raghav.com","logType":"RangerAudit","id":"543e44f5-2ec9-468a-800a-22359c333c11-0","seq_num":1,"event_count":1,"event_dur_ms":0,"tags":[],"cluster_name":"c416"}
+
+
+
+--> Hive log4j2 config for audit to log4j : 
+
+Update 'hive-log4j2' with below configs :
+-->Add list new appender to appenders: (added fileaudit here)
+```
+# list of all appenders
+appenders = console, DRFA, fileaudit
+```
+
+-->Add xaaudit to list of loggers : (Added xaaudit)
+```
+# list of all loggers
+loggers = NIOServerCnxn, ClientCnxnSocketNIO, DataNucleus, Datastore, JPOX, xaaudit
+```
+
+-->Add Appender definition (here using RollingFile type)
+```
+# daily rolling file appender
+appender.fileaudit.type = RollingFile
+appender.fileaudit.name = fileaudit
+appender.fileaudit.fileName = /tmp/audit_test_hive.log
+appender.fileaudit.filePattern = /tmp/audit_test_hive.log.%d{yyyy-MM-dd}_%i.gz
+appender.fileaudit.layout.type = PatternLayout
+appender.fileaudit.layout.pattern = %d{ISO8601} %-5p [%t]: %c{2} (%F:%M(%L)) - %m%n
+appender.fileaudit.policies.type = Policies
+appender.fileaudit.policies.time.type = TimeBasedTriggeringPolicy
+appender.fileaudit.policies.time.interval = 1
+appender.fileaudit.policies.time.modulate = true
+appender.fileaudit.strategy.type = DefaultRolloverStrategy
+appender.fileaudit.strategy.max = {{hive2_log_maxbackupindex}}
+appender.fileaudit.policies.fsize.type = SizeBasedTriggeringPolicy
+appender.fileaudit.policies.fsize.size = {{hive2_log_maxfilesize}}MB
+```
+
+-->Add Logger definition
+```
+logger.xaaudit.name = xaaudit
+logger.xaaudit.level = INFO
+logger.xaaudit.appenderRef.fileaudit.ref = fileaudit
+```
+
+First two steps is updating the existing properties (appenders and loggers). Next two configs should be added in the end of hive-log4j2
+
+-->Added below to configs under custom ranger-hive-audit :
+```
+xasecure.audit.destination.log4j=true
+xasecure.audit.destination.log4j.logger=xaaudit
+```
+Restart HS2 and verify the log file /tmp/audit_test_hive.log after executing some hive queries.
